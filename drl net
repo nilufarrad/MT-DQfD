@@ -1,6 +1,4 @@
-import tensorflow as tf
-import numpy as np
-class QNetwork:
+
     def __init__(self, learning_rate=0.01, state_size=4, 
                  action_size=2, hidden_size=10, step_size=1 ,
                  name='QNetwork'):
