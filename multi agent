@@ -1,0 +1,191 @@
+import os
+import torch
+import numpy as np
+from  model  import DQN,JointDQN
+import argparse
+import time
+from datetime import datetime
+import matplotlib.pyplot as plt
+import json
+from json import encoder
+import sys
+
+if sys.getdefaultencoding() != 'utf-8':
+    reload(sys)
+    sys.setdefaultencoding('utf8')
+encoder.FLOAT_REPR = lambda o: format(o, '.3f')
+
+from  cchn_model  import  CCHN
+
+class Model_train(object):
+    def __init__(self, parameters):
+       # self.states=self.cchn.get_state()
+       # self.actions=self.cchn.get_action()
+       self.parameters=parameters
+       self.device = torch.device(
+           "cuda" if torch.cuda.is_available() else "cpu"
+       )
+       self.simulation_result_path = parameters.simulation_results_path
+       try:
+           os.mkdir(self.simulation_result_path)
+       except Exception:
+           pass
+
+       self.parameters=parameters
+       self.pretrain=parameters.pretrain
+       self.batchsize = parameters.batchsize
+       self.sigma_factor = parameters.sigma_factor
+       self.test_number = parameters.test_number
+       self.start_train=parameters.start_train
+       self.transition_steps=parameters.transition_steps
+       self.iteration=parameters.iteration
+
+       self.primary_rate_min = parameters.primary_rate_min
+       self.secodary_rate_min = parameters.secodary_rate_min
+
+       # self.primary_number = parameters.primary_number
+       # self.secondary_number = parameters.secondary_number
+       # self.CR_router_number = parameters.CR_router_number
+       #
+       self.save_path=parameters.save_path
+       self.data_path=parameters.data_path
+       self.picture_path=parameters.picture_path
+       self.learning_rate = parameters.learning_rate
+       self.gpu_type = parameters.gpu_type
+       self.memory_capacity = parameters.memory_capacity
+       self.double_dqn = parameters.double_dqn
+       self.dueling_dqn = parameters.dueling_dqn
+       self.noisy_dqn = parameters.noisy_dqn
+
+       self.epoch=parameters.epoch
+       self.learning_rate = parameters.learning_rate
+       self.CR_router_number = parameters.CR_router_number
+       self.power_set_number=parameters.power_set_number
+
+       try:
+           os.mkdir(self.save_path)
+       except Exception:
+           pass
+
+    def multi_agent(self, cchn, pu_num=6, su_num=8, crr_num=10,
+                    EPOCH=10, ITERATION=80, learningrate=0.01, batchsize=32,
+                    inform='-1', model='double_dueling', runtype='running', modelsaving='nosave'):
+
+        cchn.abstract_network(primary_number=pu_num, secondary_number=su_num, CR_router_number=crr_num)
+
+        actions = cchn.get_action()
+        states = cchn.get_state()
+
+        print('==========System parameters==========')
+        print('Primary_number=', pu_num, '|  Secondary_number=', su_num, '|  CR-routers=', crr_num, )
+        print('Power_number=', self.power_set_number,  '|  primary_rate_min=',self.primary_rate_min)
+        print('States=', states, '| Actions =', actions, )
+        print('Memory_capacity=', self.memory_capacity, '|  Batch size=', batchsize)
+        print('Epoches=', EPOCH, '| Iterations=', ITERATION, '|  Learning_rate=', learningrate)
+        print('Device =', self.device, '| pretrained model=', self.pretrain, )
+
+
+        '''1:生成各个模型'''
+        agent = []
+        for su_i in range(su_num):
+            name = DQN(self.parameters, actions,states,learningrate,batchsize)
+            agent.append(name)
+
+        print('Model=',model,'  | Start training...')
+        metrics = {'epoch': [], 'sum_rate_su': [], 'sum_rate_pu': [], 'sum_rate': [],'fairness':[],'reward':[]}
+        for epoch in range(EPOCH):
+            for su_i in range(su_num):
+                dqn_agent=agent[su_i]
+                '''2:生成初始分配'''
+                old_decision = cchn.init_alloation()
+                old_decision_for_each_su=old_decision
+                score=0
+                for iteration in range(ITERATION):
+                    state=cchn.obtain_state(old_decision_for_each_su,su_i)
+                    action=dqn_agent.choose_action(state,epoch/self.epoch)
+                    reward,next_state,new_decision=cchn.evaluate_environmet1(action,su_i)
+                    score += reward
+
+                    dqn_agent.store_transition(state, action, reward, next_state)
+
+                    old_decision_for_each_su=new_decision
+
+                    if dqn_agent.memory_counter > self.start_train:
+                        loss =dqn_agent.learn()
+
+                        if iteration % 100 == 0:
+                            if  runtype=='deburg':
+                                print(
+                                    # datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                    'Epoch:', epoch+1,
+                                    '| SU_i:',su_i+1,
+                                    '| iteration:', iteration+1,
+                                    '| Loss: %.5f' % loss,
+                                    '| Reward: %.5f'%reward,
+                                    '| Score: %.5f'%score,
+                                )
+            if epoch%1==0:
+                self.learning_rate=self.learning_rate*0.97
+
+                # Sum_rate_PU, Sum_rate_SU = self.calculte_user_sum_rate(cchn,agent,su_num)
+                Sum_rate_PU, Sum_rate_SU, Fairness, reward = self.calculte_user_fairness(cchn, agent, su_num)
+                sumrate = Sum_rate_PU + Sum_rate_SU
+
+                metrics['epoch'].append(epoch+1)
+                metrics['sum_rate_pu'].append(Sum_rate_PU)
+                metrics['sum_rate_su'].append(Sum_rate_SU)
+                metrics['sum_rate'].append(sumrate)
+                metrics['fairness'].append(Fairness)
+                metrics['reward'].append(reward)
+
+                # print('\n')
+                print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    '| Epoch:', epoch+1,
+                    '| Sum-rate of PUs: %.2f' % Sum_rate_PU,
+                    '| Sum-rate of SUs: %.2f' % Sum_rate_SU,
+                    '| Sum-rate: %.2f' % sumrate,
+                    '| Fairness: %.2f' % Fairness,
+                    '| Reward: %.2f' % reward,
+                      # '\n'
+                )
+
+        '''保存模型,保存数据'''
+        if modelsaving=='save':
+            torch.save(agent,self.save_path+'agent'+inform)
+            json.dump({'metrics': metrics}, fp=open(self.data_path+'traing_data'+inform +'.rs', 'w'),indent=4)
+
+        if runtype=='deburg':
+            '''性能画图1: sum-rate'''
+            plt.figure(figsize=(8, 5))
+            plt.xlabel(r'The number of epoches', fontsize=15)
+            plt.ylabel(r'Sum-rate (Mnats/s)', fontsize=15)
+            plt.plot(metrics['epoch'], np.array(metrics['sum_rate_pu'])/pow(10,6), '->b', MarkerSize=1, label=u'PU')
+            plt.plot(metrics['epoch'], np.array(metrics['sum_rate_su'])/pow(10,6), '-or', MarkerSize=1, label=u'SU')
+            plt.plot(metrics['epoch'], np.array(metrics['sum_rate_su'])/pow(10,6)+np.array(metrics['sum_rate_pu'])/pow(10,6),
+                     '-sg', MarkerSize=1, label=u'PU+SU')
+            plt.legend(fontsize=12)
+            plt.grid()
+            plt.savefig(self.simulation_result_path+ 'Fig1 sum_rate '+model+' PU-' + str(pu_num) +
+                        ' SU-' + str(su_num) +' CRR-' + str(crr_num) +' EP-'+str(EPOCH)+
+                        ' iter-' + str(ITERATION) +' batsz-' + str(batchsize) +
+                        ' lr-' + str(learningrate) + '.pdf', dpi=600, bbox_inches='tight')
+
+            '''性能画图2: reward'''
+            plt.figure(figsize=(8, 5))
+            plt.xlabel(r'The number of epoches', fontsize=15)
+            plt.ylabel(r'Reward', fontsize=15)
+            plt.plot(metrics['epoch'], np.array(metrics['reward']), '-or', MarkerSize=1)
+            # plt.legend(fontsize=12)
+            plt.grid()
+
+            plt.savefig(self.simulation_result_path+ 'Fig1 reward '+model+' PU-' + str(pu_num) +
+                        ' SU-' + str(su_num) +' CRR-' + str(crr_num) +' EP-'+str(EPOCH)+
+                        ' iter-' + str(ITERATION) +' batsz-' + str(batchsize) +
+                        ' lr-' + str(learningrate) + '.pdf', dpi=600, bbox_inches='tight')
+
+            # plt.show()
+
+        Sum_rate_PU, Sum_rate_SU = self.calculte_user_sum_rate(cchn, agent, su_num)
+        Sum_rate_PU, Sum_rate_SU, Fairness,reward=self.calculte_user_fairness(cchn, agent, su_num)
+
+        return  metrics,Sum_rate_PU,Sum_rate_SU,Fairness
