@@ -1,0 +1,60 @@
+import numpy  as np
+from random import choice, random
+
+
+def node_distance(self , node_s , node_d):
+    path = nx.shortest_path(G,node_s , node_d)
+    dst = np.round(distance.euclidean((G.nodes[node_s]['pos']),(G.nodes[node_d]['pos'])))
+    return dst
+
+def linkgain(self, dst , node_distance):
+    f = np.random.lognormal(0, 2, size=None) 
+    gain = 10**-6 * f * dst**-4
+    return gain
+def signal_reception_indicator(self,transmit_power ,xth):
+    
+   # action[0]=power_desicion
+   # action[1]=node_selection
+    
+    sinr = (gain *(transmit_power*10**-3)) / (self.awgn + self.snr)      #pwr watt
+    sinrfinal= 10*(np.log10(sinr))     #watt to db 
+    return sinr , sinrfinal
+
+      thsh=-90
+
+       if sinrfinal >= thsh:
+            
+            xth=1
+  
+       else:
+            xth=0
+            
+def pcr(self):
+    pcr=[]
+    PCR = transmit_power / self.bw *np.log2(1+sinr)
+    pcr.append(PCR)
+    
+def latancy(self):
+    latancy =[]
+    LATANCY = self.packetsize / (self.bw * log(1 + sinr))
+    
+    latancy.append(LATANCY)
+    
+def calculate_reward(self):
+    REWARD = -np.log2((0.01*LATANCY)+(0.9*PCR)   
+    
+    reward=[] 
+    reward.append(REWARD)
+    return(reward)    
+
+def resp_rating(self):
+        
+    increment_counter_i = sum(latancy)/len(latancy)
+        
+        if latancy[-1] > increment_counter_i:
+            trns_pwr_i = transmit_power[-1] + 10
+        elif latancy[-1] < increment_counter_i:
+             trns_pwr_i = power_sellection[-1] - 10
+        else:
+            trns_pwr_i = power_sellection[-1]
+
