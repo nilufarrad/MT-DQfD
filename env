@@ -1,0 +1,69 @@
+import gym
+from gym import Env
+from gym.spaces import MultiDiscrete, Discrete
+import networkx as nx
+import pandas as pd
+import numpy  as np
+from random import choice, random
+
+
+
+class CustomEnv(Env):
+        def __init__(self):
+            self.transmit_power = np.arange(100,610,10)
+            self.graph = G
+            self.su_num = num_su
+            self.nodes=nodes 
+            self.bw=bw
+            self.awgn=awgn
+            self.snr=snr
+            
+            
+            self.observation_space = spaces.Tuple((
+                spaces.Discrete(2),
+                spaces.Discrete(len(self.transmit_power)-1)))
+                
+            self.action_space = spaces.Tuple((
+                spaces.Discrete(1),
+                spaces.Discrete(len(self.su_num))))
+        
+        
+#alternative
+             #self.observation_space: MultiDiscrete = MultiDiscrete(
+                 #[self.num_pwr(), 2 ])
+            
+             #self.observation_space: MultiDiscrete = MultiDiscrete(
+                 #[self.num_nodes(), 1 ])
+            
+            #def num_pwr(self) -> int:
+                #return len(self.transmit_power)-1
+               
+            #def num_nodes(self) -> int:
+                #return len(self.G.nodes)   
+ #alternative                
+
+         
+           def observation(self):
+            pass
+            
+                actionvec=[]
+                powerselection=np.random(self.transmit_power)
+    
+    
+    
+            def step(self, action):
+                done = False
+          
+                self.reward = calculate_reward
+                self.done = False
+                info={}
+                observation=self.signal_reception_indicator , self.resp_rating
+                cummalativereward+=  self.reward
+                return observation , cummalativereward,self.reward , done 
+            
+            
+            def reset(self):
+                self.state = 0
+    
+              
+
